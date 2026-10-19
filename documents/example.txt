@@ -1,0 +1,16 @@
+Acme Corporation Remote Work Policy
+
+Employees may work remotely up to three days per week with manager
+approval.
+
+Employees working remotely must use the company VPN when accessing
+internal systems. Multi-factor authentication is required for all
+remote access.
+
+Company confidential information must not be stored on personal
+devices. Security incidents must be reported to the security team
+within one hour of discovery.
+
+Full-time employees receive twenty paid vacation days per calendar
+year. Up to five unused vacation days may be carried into the next
+calendar year.
