@@ -5,7 +5,10 @@ from pathlib import Path
 import sys
 
 from rag.config import get_settings
-from rag.document_store import create_document_store
+from rag.document_store import (
+    create_document_store,
+    persist_document_store,
+)
 from rag.indexing_pipeline import build_indexing_pipeline
 
 
@@ -111,6 +114,11 @@ def main() -> None:
     ]
 
     document_store = create_document_store(settings)
+
+    persist_document_store(
+        document_store=document_store,
+        settings=settings,
+    )
 
     print()
     print(f"Chunks written: {documents_written}")

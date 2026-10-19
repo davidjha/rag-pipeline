@@ -23,6 +23,11 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
+    document_store_backend: str
+    
+    in_memory_store_path: Path
+    in_memory_persist: bool
+
     opensearch_url: str
     opensearch_username: str
     opensearch_password: str
@@ -46,6 +51,14 @@ class Settings:
     rerank_top_k: int
 
     def validate(self, require_reranker: bool = False) -> None:
+        if self.document_store_backend not in {
+            "opensearch",
+            "in_memory",
+        }:
+            raise ValueError(
+                "DOCUMENT_STORE_BACKEND must be either "
+                "'opensearch' or 'in_memory'."
+            )
         if not self.embedding_model_path.exists():
             raise FileNotFoundError(
                 "Embedding model was not found at "
@@ -78,6 +91,20 @@ def get_settings() -> Settings:
     load_dotenv()
 
     settings = Settings(
+        document_store_backend=os.getenv(
+            "DOCUMENT_STORE_BACKEND",
+            "opensearch",
+        ).strip().lower(),
+        in_memory_store_path=Path(
+            os.getenv(
+                "IN_MEMORY_STORE_PATH",
+                "./data/in-memory-document-store.json",
+            )
+        ),
+        in_memory_persist=_as_bool(
+            os.getenv("IN_MEMORY_PERSIST"),
+            default=True,
+        ),
         opensearch_url=os.getenv(
             "OPENSEARCH_URL",
             "https://localhost:9200",
