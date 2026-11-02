@@ -1,8 +1,10 @@
 cryptography>=3.1
 haystack-ai>=2.31,<3.0
+fastapi
 jq
 markdown-it-py
 mdit_plain
+openai
 openpyxl
 opensearch-haystack
 pandas
@@ -14,3 +16,4 @@ sentence-transformers-haystack
 sentence-transformers
 tabulate
 trafilatura
+uvicorn

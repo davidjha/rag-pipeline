@@ -13,7 +13,7 @@ from haystack_integrations.components.retrievers.opensearch import (
     OpenSearchEmbeddingRetriever,
 )
 
-from rag.config import Settings, get_settings
+from config import Settings, get_settings
 from rag.document_store import create_document_store
 from rag.embedders import (
     create_query_embedder,
@@ -23,13 +23,16 @@ from rag.embedders import (
 
 def build_retrieval_pipeline(
     settings: Settings | None = None,
+    *,
+    document_store=None
 ) -> Pipeline:
     settings = settings or get_settings()
     settings.validate(
         require_reranker=settings.enable_reranker
     )
 
-    document_store = create_document_store(settings)
+    if document_store is None:
+        document_store = create_document_store(settings)
     query_embedder = create_query_embedder(settings)
 
     if settings.document_store_backend == "in_memory":
@@ -44,6 +47,11 @@ def build_retrieval_pipeline(
         )
 
     elif settings.document_store_backend == "opensearch":
+        from haystack_integrations.components.retrievers.opensearch import(
+            OpenSearchBM25Retriever,
+            OpenSearchEmbeddingRetriever
+        )
+
         bm25_retriever = OpenSearchBM25Retriever(
             document_store=document_store,
             top_k=settings.bm25_top_k,
@@ -109,21 +117,38 @@ def build_retrieval_pipeline(
 
     return pipeline
 
-
 def run_retrieval_pipeline(
     pipeline: Pipeline,
     query: str,
     settings: Settings,
     top_k: int,
+    *,
+    candidate_k: int | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> list[Document]:
+    if top_k <= 0:
+        raise ValueError("top_k must be positive.")
+
+    if candidate_k is not None and candidate_k < top_k:
+        raise ValueError("candidate_k must be at least top_k.")
+
     data: dict[str, Any] = {
         "query_embedder": {
             "text": query,
         },
         "bm25_retriever": {
             "query": query,
+            "filters": filters,
+        },
+        "embedding_retriever": {
+            "filters": filters,
         },
     }
+
+    if candidate_k is not None:
+        data["bm25_retriever"]["top_k"] = candidate_k
+        data["embedding_retriever"]["top_k"] = candidate_k
+        data["joiner"] = {"top_k": candidate_k}
 
     if settings.enable_reranker:
         data["reranker"] = {
@@ -137,7 +162,6 @@ def run_retrieval_pipeline(
         return result["reranker"]["documents"]
 
     return result["joiner"]["documents"][:top_k]
-
 
 def retrieve(
     query: str,

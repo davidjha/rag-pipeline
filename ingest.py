@@ -1,131 +1,55 @@
 from __future__ import annotations
 
+# Load offline configuration before importing Haystack components.
+from config import get_settings
+
 import argparse
-from pathlib import Path
-import sys
+import json
 
-from rag.config import get_settings
-from rag.document_store import (
-    create_document_store,
-    persist_document_store,
-)
-from rag.indexing_pipeline import build_indexing_pipeline
+from rag.files import collect_files
 
-
-SUPPORTED_EXTENSIONS = {
-    ".txt",
-    ".pdf",
-    ".docx",
-    ".pptx",
-}
-
-def is_hidden_or_temporary(path: Path) -> bool:
-    return (
-        any(part.startswith(".") for part in path.parts)
-        or path.name.startswith("~$")
-        or path.name.endswith(".tmp")
-    )
-
-
-def collect_files(paths: list[str]) -> list[Path]:
-    files: list[Path] = []
-
-    for raw_path in paths:
-        path = Path(raw_path).expanduser().resolve()
-
-        if not path.exists():
-            raise FileNotFoundError(
-                f"Input path does not exist: {path}"
-            )
-
-        if path.is_file():
-            if (
-                path.suffix.lower() in SUPPORTED_EXTENSIONS
-                and not is_hidden_or_temporary(path)
-            ):
-                files.append(path)
-            else:
-                print(
-                    f"Skipping unsupported or temporary file: {path}",
-                    file=sys.stderr,
-                )
-            continue
-
-        for candidate in path.rglob("*"):
-            if (
-                candidate.is_file()
-                and candidate.suffix.lower()
-                in SUPPORTED_EXTENSIONS
-                and not is_hidden_or_temporary(candidate)
-            ):
-                files.append(candidate)
-
-    return sorted(set(files))
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Convert, split, embed, and index local documents "
-            "in OpenSearch."
-        )
+        description="Recursively discover and index local documents."
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="List matching files without ingesting them.",
+        help="List matching files without loading models or writing data.",
     )
-
     parser.add_argument(
         "paths",
-        nargs="+",
-        help="Files or directories to ingest.",
+        nargs="*",
+        help="Files/directories; defaults to DOCUMENTS_ROOT.",
     )
-
     args = parser.parse_args()
-    files = collect_files(args.paths)
+
+    settings = get_settings()
+    paths = args.paths or [settings.documents_root]
+    files = collect_files(paths)
+
+    print(f"Found {len(files)} supported file(s):")
+    for path in files:
+        print(f"  {path}")
+
+    if args.dry_run:
+        print("Dry run complete; no models loaded or documents written.")
+        return
 
     if not files:
         raise SystemExit("No supported documents were found.")
 
-    print(f"Found {len(files)} document file(s):")
-    for file_path in files:
-        print(f"  - {file_path}")
+    # Defer these imports so dry-run remains lightweight.
+    from rag.document_store import create_document_store
+    from rag.services import Ingestor
 
-    if args.dry_run:
-        print()
-        print("Dry rune complete; no documents were ingest.")
-        return
-
-    settings = get_settings()
     settings.validate()
+    store = create_document_store(settings)
+    ingestor = Ingestor(store, settings)
 
-    pipeline = build_indexing_pipeline(settings)
-
-    result = pipeline.run(
-        data={
-            "converter": {
-                "sources": files,
-            }
-        }
-    )
-
-    documents_written = result["writer"][
-        "documents_written"
-    ]
-
-    document_store = create_document_store(settings)
-
-    persist_document_store(
-        document_store=document_store,
-        settings=settings,
-    )
-
-    print()
-    print(f"Chunks written: {documents_written}")
-    print(
-        "Total chunks in index: "
-        f"{document_store.count_documents()}"
-    )
+    result = ingestor.run_files(files)
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

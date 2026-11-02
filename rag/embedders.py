@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from config import Settings, get_settings
 from haystack_integrations.components.embedders.sentence_transformers import (
     SentenceTransformersDocumentEmbedder,
     SentenceTransformersTextEmbedder,
@@ -7,8 +8,6 @@ from haystack_integrations.components.embedders.sentence_transformers import (
 from haystack_integrations.components.rankers.sentence_transformers import (
     SentenceTransformersSimilarityRanker,
 )
-
-from rag.config import Settings, get_settings
 
 
 def create_document_embedder(

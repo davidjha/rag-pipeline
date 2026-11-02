@@ -1,6 +1,6 @@
 from haystack import Document
 
-from rag.config import get_settings
+from config import get_settings
 from rag.embedders import create_reranker
 
 # Using the example 

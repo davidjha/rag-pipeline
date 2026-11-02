@@ -9,18 +9,21 @@ from haystack.components.preprocessors import (
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DuplicatePolicy
 
-from rag.config import Settings, get_settings
+from config import Settings, get_settings
 from rag.document_store import create_document_store
 from rag.embedders import create_document_embedder
 
 
 def build_indexing_pipeline(
     settings: Settings | None = None,
+    *,
+    document_store=None
 ) -> Pipeline:
     settings = settings or get_settings()
     settings.validate()
 
-    document_store = create_document_store(settings)
+    if document_store is None:
+        document_store = create_document_store(settings)
     document_embedder = create_document_embedder(settings)
 
     pipeline = Pipeline()

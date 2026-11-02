@@ -1,89 +1,62 @@
 from __future__ import annotations
 
+from config import get_settings
+
 import argparse
-from textwrap import shorten
-
-from rag.config import get_settings
-from rag.retrieval_pipeline import retrieve
-
-
-def get_source(meta: dict) -> str:
-    for key in (
-        "file_path",
-        "source_path",
-        "filename",
-        "name",
-    ):
-        value = meta.get(key)
-        if value:
-            return str(value)
-
-    return "unknown"
+import json
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Run hybrid BM25/vector retrieval and optional "
-            "MS MARCO reranking."
-        )
+        description="Test hybrid retrieval against the configured store."
     )
-
-    parser.add_argument(
-        "query",
-        help="Question or search query.",
-    )
-
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=None,
-        help="Number of final chunks to return.",
-    )
-
+    parser.add_argument("query")
+    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--candidate-k", type=int, default=20)
+    parser.add_argument("--no-rerank", action="store_true")
     args = parser.parse_args()
+
+    if args.top_k <= 0 or args.candidate_k < args.top_k:
+        parser.error("Require candidate-k >= top-k > 0.")
+
+    from dataclasses import replace
+
+    from rag.document_store import create_document_store
+    from rag.services import Reranker, Retriever
+
     settings = get_settings()
 
-    documents = retrieve(
-        query=args.query,
-        settings=settings,
-        top_k=args.top_k,
+    if args.no_rerank:
+        settings = replace(settings, reranker_enabled=False)
+
+    settings.validate(
+        require_reranker=settings.reranker_enabled
     )
 
-    if not documents:
-        print("No matching documents were found.")
-        return
+    store = create_document_store(settings)
+    ranker = Reranker(settings)
+    retriever = Retriever(store, settings, ranker)
 
-    print(f"Query: {args.query}")
-    print(f"Results: {len(documents)}")
-    print()
+    documents = retriever.run(
+        query=args.query,
+        top_k=args.top_k,
+        candidate_k=args.candidate_k,
+        rerank=not args.no_rerank,
+    )
 
-    for position, document in enumerate(documents, start=1):
-        source = get_source(document.meta)
-        page_number = document.meta.get("page_number")
-        split_id = document.meta.get("split_id")
-
-        print("=" * 80)
-        print(f"Rank: {position}")
-        print(f"Score: {document.score}")
-        print(f"Document ID: {document.id}")
-        print(f"Source: {source}")
-
-        if page_number is not None:
-            print(f"Page: {page_number}")
-
-        if split_id is not None:
-            print(f"Split: {split_id}")
-
-        print()
-        print(
-            shorten(
-                document.content or "",
-                width=1_000,
-                placeholder=" ...",
-            )
-        )
-        print()
+    print(json.dumps(
+        [
+            {
+                "id": document.id,
+                "content": document.content,
+                "metadata": document.meta,
+                "score": document.score,
+            }
+            for document in documents
+        ],
+        indent=2,
+        default=str,
+    ))
 
 
 if __name__ == "__main__":

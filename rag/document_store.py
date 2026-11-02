@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 from haystack.document_stores.in_memory import (
     InMemoryDocumentStore,
 )
-from haystack_integrations.document_stores.opensearch import (
-    OpenSearchDocumentStore,
-)
 
-from rag.config import Settings, get_settings
+from config import Settings, get_settings
 
-
-DocumentStore = InMemoryDocumentStore | OpenSearchDocumentStore
-
+# Avoid importing openssearch at run time
+if TYPE_CHECKING:
+    from haystack_integrations.document_stores.opensearch import (
+        OpenSearchDocumentStore,
+    )
+    DocumentStore = InMemoryDocumentStore | OpenSearchDocumentStore
+else:
+    DocumentStore = Any
 
 def _create_in_memory_store(
     settings: Settings,
@@ -44,6 +46,9 @@ def _create_in_memory_store(
 def _create_opensearch_store(
     settings: Settings,
 ) -> OpenSearchDocumentStore:
+    from haystack_integrations.document_stores.opensearch import (
+        OpenSearchDocumentStore,
+    )
     if not settings.opensearch_password:
         raise ValueError(
             "OPENSEARCH_PASSWORD is required when "
@@ -59,6 +64,9 @@ def _create_opensearch_store(
             "m": 16,
         },
     }
+    extra = {}
+    if settings.opensearch_ca_certs:
+        extra["ca_certs"] = settings.opensearch_ca_certs
 
     return OpenSearchDocumentStore(
         hosts=settings.opensearch_url,
@@ -74,6 +82,7 @@ def _create_opensearch_store(
         verify_certs=settings.opensearch_verify_certs,
         timeout=settings.opensearch_timeout,
         return_embedding=False,
+        **extra,
     )
 
 
