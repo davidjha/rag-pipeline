@@ -1,17 +1,16 @@
 # rag-pipeline
 
-
 ## Setup python environment
 
 ### Create a virtual environment
 
 python venv .rag-pipeline
 
-source .rage-pipeline/bin/activate
+source .rag-pipeline/bin/activate
 
 ### Install python packages
 
-python pip install -r requirments.txt
+python pip install -r requirements.txt
 
 ## Save python package for airgapped systems
 
@@ -43,18 +42,45 @@ Compiled wheels are typically specific to:
 - Systems libraries
 
 ## Run RAG pipeline
-### Setup the document store
-python setup_document_store.py
 
 ### Ingest documents
-python ingest.py documents/
+python ingest.py <option>  <arg> 
 
+### Retrieve documents
+python retrieve.py <"Prompt here"> <option>
+
+### Test Reranker
+python test_reranker.py
+
+## Run RAG API
+
+### Start the api server
+uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1
+
+### Ingest documents
+curl -sS http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: replace-with-a-random-secret" \
+  -d '{"path":".","dry_run":true}'
+
+### Retrieve documents
+curl -sS http://localhost:8000/retrieve \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: replace-with-a-random-secret" \
+  -d '{
+    "query":<"query">,
+    "top_k":3,
+    "candidate_k":20,
+    "rerank":false
+  }'
+
+## Open search  
 ### Retrieve documents
 python retrieve.py \
     <" Query goes here" > \
     --top-k 3 //limits the final reranked results
 
-### Insepcting stored chunks in opensearch
+### Inspecting stored chunks in opensearch
 curl -k \
     -u 'admin:YOUR_PASSWORD' \
     'https://localhost:9200/_cat/indices/rag-documents?v'
